@@ -2,42 +2,44 @@ import requests
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-import os
-from flask import Flask, render_template, redirect, url_for,request,jsonify
+import chromedriver_binary  # noqa: registers chromedriver in PATH
+from flask import Flask, request, jsonify
+import time
 
 app = Flask(__name__)
 
 @app.route('/')
-def hello_world():
-    return "<p>This is a Self Made Image Location API</p>"
+def home():
+    return "<p>Self-Made Image Location API</p>"
 
-@app.route('/api',methods = ['POST'])
+@app.route('/api', methods=['POST'])
 def location_data():
-    data = request.get_json()
-    place_to_search = data.get('location')
-    url = f'https://unsplash.com/s/photos/{place_to_search}'
-    place_links = []
+    data = request.get_json() or {}
+    place = data.get('location')
+    if not place:
+        return jsonify({'error': 'Missing "location"'}), 400
 
+    url = f'https://unsplash.com/s/photos/{place}'
     options = Options()
-    options.add_argument('--headless')  # Runs Chrome in background
-    options.add_argument('--disable-gpu')
+    options.add_argument('--headless')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
 
     driver = webdriver.Chrome(options=options)
-
     driver.get(url)
-    page_source = driver.page_source
-
-    soup = BeautifulSoup(page_source, 'html.parser')
-
-    for link in soup.find_all('img'):
-        if link.get('alt') and not link.get('alt').startswith('Go to'):
-            place_links.append(link.get('src'))
-
+    time.sleep(3)
+    soup = BeautifulSoup(driver.page_source, 'html.parser')
     driver.quit()
-    return jsonify({'links':place_links})
+
+    links = [img['src'] for img in soup.find_all('img')
+             if img.get('alt') and not img['alt'].startswith('Go to')]
+    return jsonify({'links': links})
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8000)
 
 
-
+# The download_image function is commented out as it's not being used for now.
 # def download_image(url, photo_no):
 #     # Create the folder if it doesn't exist
 #     folder = "images"
@@ -54,7 +56,3 @@ def location_data():
 #         print(f"Image {photo_no} downloaded successfully!")
 #     else:
 #         print(f"Failed to retrieve image {photo_no}. HTTP status code: {response.status_code}")
-
-
-
-
